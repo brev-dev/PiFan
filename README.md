@@ -201,6 +201,123 @@ You can:
 - Do not drive a 5 V fan directly from a 3.3 V GPIO pin; always use a driver or transistor.
 - Test behaviour under load and confirm temperatures remain below Raspberry Pi throttling limits.
 
+# Simple ON/OFF Fan Control (No Python, No PWM)
+
+If your cooling requirements are modest or your fan is not PWM-capable, you can use the Raspberry Pi’s built-in gpio-fan overlay. This provides automatic on/off operation based on CPU temperature without needing any software scripts.
+
+This is the simplest possible method for fan control.
+
+## Features
+
+- Zero CPU overhead
+- Uses built-in Raspberry Pi firmware
+- No Python or systemd services required
+- Fan turns on above a threshold, and off below a lower threshold
+- Works with any 5V fan driven via a transistor or MOSFET
+
+## Hardware Requirements
+
+The Pi cannot drive a 5V fan directly from a GPIO pin.
+
+You must use:
+
+- NPN transistor
+- OR MOSFET
+- OR a small driver board (my setup uses this)
+
+Typical wiring:
+
+
+| Component              | To                                         |
+|------------------------|---------------------------------------------|
+| Fan +5V lead           | Pi 5V pin (pin 2 or 4)                      |
+| Fan GND                | Pi GND (pin 6) through transistor/MOSFET    |
+| Transistor gate/base   | GPIO pin (default: GPIO14, physical pin 8)  |
+| Transistor/MOSFET GND  | Pi GND                                      |
+
+You can change the GPIO pin if needed.
+
+## 1. Enable gpio-fan overlay
+
+Edit `/boot/config.txt`:
+```
+dtoverlay=gpio-fan,gpiopin=14,temp=55000
+```
+
+Breakdown:
+- `gpiopin=14` → controls your transistor board on GPIO14 (pin 8)
+- `temp=55000` → 55.0 °C turn-on temperature
+
+The fan will typically turn off around 50 °C due to built-in hysteresis.
+
+Reboot to apply:
+```
+sudo reboot
+```
+
+## 2. Verify the fan turns on/off
+
+Check CPU temperature:
+```
+vcgencmd measure_temp
+```
+
+Or continuously:
+```
+watch -n 1 vcgencmd measure_temp
+```
+
+The fan will start when temperature > 55°C and stop when it drops ~5°C below that.
+
+## 3. Optional: Change temperature threshold
+
+You can adjust `temp=` as needed:
+
+Example for a cooler system:
+```
+dtoverlay=gpio-fan,gpiopin=14,temp=60000
+```
+Example for more aggressive cooling:
+```
+dtoverlay=gpio-fan,gpiopin=14,temp=50000
+```
+Values are in millidegrees Celsius.
+
+## 4. Optional: Use a different GPIO pin
+
+If your transistor board uses a different pin:
+```
+dtoverlay=gpio-fan,gpiopin=18,temp=55000
+```
+
+Just ensure the wiring and transistor board match the selected pin.
+
+## 5. Conflicts with Hardware PWM Setup
+
+If you move to the hardware-PWM `fan.py` controller (recommended), you must remove or comment out any `gpio-fan` overlays:
+```
+# dtoverlay=gpio-fan,gpiopin=14,temp=55000
+```
+
+The two systems should not run at the same time.
+
+## When to Use the Simple ON/OFF Method
+
+This is the right option when:
+- You want minimal resource usage
+- Your fan is old-school 5V and not PWM-capable
+- You don’t care about noise or granularity
+- You want the most robust “just works” behaviour
+
+Use the PWM Python controller when you want:
+- Variable fan speeds
+- Much quieter operation
+- Temperature ramping
+- Logging
+- Finer control logic
+
+
+
 ## License
 
 MIT
